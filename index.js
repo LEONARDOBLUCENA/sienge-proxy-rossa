@@ -112,5 +112,33 @@ app.get('/sienge/bank-movement', async (req, res) => {
   }
 });
 
+// Contas a Pagar em aberto — /outcome com selectionType=D (data de vencimento, inclui não pagos)
+app.get('/sienge/payable', async (req, res) => {
+  try {
+    const { start, end } = req.query;
+    const url = `${SIENGE_BASE}/outcome?startDate=${start}&endDate=${end}&selectionType=D&correctionIndexerId=0&correctionDate=${end}`;
+    const resp = await fetch(url, { headers: { 'Authorization': `Basic ${CREDS}` } });
+    const text = await resp.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = text; }
+    if (!resp.ok) {
+      return res.status(resp.status).json({
+        error: true,
+        upstreamStatus: resp.status,
+        upstreamStatusText: resp.statusText,
+        hint: resp.status === 429
+          ? 'Limite diário de requisições Bulk do Sienge atingido. Aguarde até o reset diário ou considere um plano com mais requisições.'
+          : (resp.status === 401 || resp.status === 403)
+          ? 'Credenciais inválidas ou sem permissão para este recurso — confira usuário/senha/subdomínio e as autorizações do usuário de API no Sienge.'
+          : 'Erro retornado pelo Sienge.',
+        upstreamBody: data
+      });
+    }
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: true, message: e.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Proxy rodando na porta ${PORT}`));
